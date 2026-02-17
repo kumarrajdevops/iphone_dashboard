@@ -4,7 +4,24 @@ import httpx
 from datetime import date, timedelta
 from typing import Dict, List, Any
 
+import sys
+import os
+# Add parent directory to path to import hubstaff_token_manager
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(parent_dir)
+
+from hubstaff_token_manager import HubstaffTokenManager
+
 router = APIRouter(prefix="/api/hubstaff", tags=["hubstaff"])
+
+# Initialize Manager 
+# NOTE: In production, you might want to initialize this once in main.py and pass it, 
+# but for simplicity here we instantiate cleanly or use a singleton pattern if we want.
+# Given the simple structure, we'll instantiate it here.
+# Ensure HUBSTAFF_PAT is set
+pat = os.getenv("HUBSTAFF_PAT")
+token_manager = HubstaffTokenManager(pat) if pat else None
 
 def format_time(seconds: int) -> str:
     hours = seconds // 3600
@@ -12,12 +29,14 @@ def format_time(seconds: int) -> str:
     return f"{hours}:{minutes:02d}"
 
 async def fetch_hubstaff_data(start_date: date, end_date: date):
-    hubstaff_token = os.getenv("HUBSTAFF_ACCESS_TOKEN")
     hubstaff_org_id = os.getenv("HUBSTAFF_ORG_ID")
     target_user_id = os.getenv("HUBSTAFF_USER_ID")
 
-    if not hubstaff_token or not hubstaff_org_id:
-        return {"error": "Hubstaff credentials missing"}
+    if not token_manager:
+        return {"error": "Hubstaff PAT missing"}
+
+    if not hubstaff_org_id:
+        return {"error": "Hubstaff Org ID missing"}
 
     url = f"https://api.hubstaff.com/v2/organizations/{hubstaff_org_id}/activities/daily"
     params = {
@@ -28,11 +47,24 @@ async def fetch_hubstaff_data(start_date: date, end_date: date):
 
     async with httpx.AsyncClient() as client:
         try:
+            # Get valid access token
+            access_token = token_manager.get_access_token()
+            
             response = await client.get(
                 url,
-                headers={"Authorization": f"Bearer {hubstaff_token}"},
+                headers={"Authorization": f"Bearer {access_token}"},
                 params=params
             )
+
+            # Retry once on 401 (Refresh)
+            if response.status_code == 401:
+                print("Got 401 from Hubstaff. Refreshing token...")
+                access_token = token_manager.refresh_access_token()
+                response = await client.get(
+                    url,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params=params
+                )
             
             if response.status_code != 200:
                 print(f"Hubstaff Error: {response.text}")

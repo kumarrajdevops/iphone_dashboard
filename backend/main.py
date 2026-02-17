@@ -7,10 +7,15 @@ import httpx
 from datetime import datetime, date
 import uvicorn
 from routers import hubstaff
+from hubstaff_token_manager import HubstaffTokenManager
 
 load_dotenv()
 
 app = FastAPI()
+
+# Initialize Manager
+pat = os.getenv("HUBSTAFF_PAT")
+token_manager = HubstaffTokenManager(pat) if pat else None
 
 app.include_router(hubstaff.router)
 
@@ -40,19 +45,46 @@ async def get_dashboard_data():
         # 1. Hubstaff Data
         hubstaff_data = {"total_time": "--:--", "project": "Connect API", "status": "inactive"}
         try:
-            hubstaff_token = os.getenv("HUBSTAFF_ACCESS_TOKEN")
             hubstaff_org_id = os.getenv("HUBSTAFF_ORG_ID")
-            if hubstaff_token and hubstaff_org_id:
-                # Example endpoint - adjust based on specific Hubstaff API needs
-                # Using a date range for "today"
-
+            hubstaff_user_id = os.getenv("HUBSTAFF_USER_ID")
+            
+            if hubstaff_org_id and token_manager:
                 today_str = date.today().isoformat()
                 
-                hs_response = await client.get(
-                    f"https://api.hubstaff.com/v2/organizations/{hubstaff_org_id}/activities/daily?date[start]={today_str}&date[end]={today_str}",
-                    headers={"Authorization": f"Bearer {hubstaff_token}"}
-                )
-                if hs_response.status_code == 200:
+                try:
+                    access_token = token_manager.get_access_token()
+                    
+                    # URL compatible with what works in routers/hubstaff.py
+                    # Using date[stop] instead of date[end] and adding filters[user]
+                    url = f"https://api.hubstaff.com/v2/organizations/{hubstaff_org_id}/activities/daily"
+                    params = {
+                        "date[start]": today_str,
+                        "date[stop]": today_str,
+                        "filters[user]": hubstaff_user_id
+                    }
+                    
+                    hs_response = await client.get(
+                        url,
+                        headers={"Authorization": f"Bearer {access_token}"},
+                        params=params
+                    )
+                    
+                    if hs_response.status_code == 401:
+                         access_token = token_manager.refresh_access_token()
+                         hs_response = await client.get(
+                            url,
+                            headers={"Authorization": f"Bearer {access_token}"},
+                            params=params
+                         )
+
+                except Exception as e:
+                    print(f"Token Manager Error in main: {e}")
+                    hs_response = None # Handle gracefully
+            else:
+                 # Fallback/Error if no token manager (shouldn't happen if env is set)
+                 hs_response = None
+            
+            if hs_response and hs_response.status_code == 200:
                     data = hs_response.json()
                     # Simplified logic to sum time from response
                     total_seconds = sum(item.get('tracked', 0) for item in data.get('daily_activities', []))
