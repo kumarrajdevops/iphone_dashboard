@@ -11,7 +11,8 @@ function App() {
 
     const fetchDashboard = async () => {
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            if (!apiUrl.startsWith('http')) apiUrl = `https://${apiUrl}`;
             const dashboardRes = await fetch(`${apiUrl}/api/dashboard`);
             const dashboardJson = await dashboardRes.json();
             setData(dashboardJson);
@@ -23,7 +24,8 @@ function App() {
 
     const fetchHubstaffToday = async () => {
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            if (!apiUrl.startsWith('http')) apiUrl = `https://${apiUrl}`;
             const res = await fetch(`${apiUrl}/api/hubstaff/today`);
             const json = await res.json();
             if (!json.error) setHsDaily(json);
@@ -34,7 +36,8 @@ function App() {
 
     const fetchHubstaffWeekly = async () => {
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            let apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+            if (!apiUrl.startsWith('http')) apiUrl = `https://${apiUrl}`;
             const res = await fetch(`${apiUrl}/api/hubstaff/weekly`);
             const json = await res.json();
             if (Array.isArray(json)) setHsWeekly(json);
