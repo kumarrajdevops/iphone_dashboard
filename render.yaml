@@ -10,12 +10,11 @@ services:
       - key: PYTHON_VERSION
         value: 3.9.0
 
+staticSites:
   # Frontend Service
-  - type: static
-    name: dashboard-frontend
-    env: static
+  - name: dashboard-frontend
     buildCommand: npm install && npm run build
-    publishDir: dist
+    publishPath: dist
     root: frontend
     routes:
       - type: rewrite
