@@ -1,0 +1,399 @@
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    /* 2 columns for mobile/tablet feel on kiosk */
+    grid-template-rows: auto auto auto;
+    gap: var(--gap);
+    padding: var(--gap);
+    height: 100%;
+    box-sizing: border-box;
+}
+
+/* Bento Grid Areas */
+/* Bento Grid Areas */
+.widget-status {
+    grid-column: span 1;
+    background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    /* Purple-ish */
+}
+
+.widget-hubstaff-daily {
+    grid-column: span 1;
+    background: linear-gradient(135deg, #FF6B6B 0%, #EE5253 100%);
+    /* Red/Pink */
+}
+
+.widget-calendar {
+    grid-column: 1 / 2;
+    background: linear-gradient(135deg, #4834d4 0%, #686de0 100%);
+}
+
+.widget-slack {
+    grid-column: 2 / 3;
+    background: linear-gradient(135deg, #f0932b 0%, #ffbe76 100%);
+}
+
+.widget-build {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #6ab04c 0%, #badc58 100%);
+}
+
+@media (min-width: 768px) {
+    .dashboard-grid {
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+    }
+
+    .widget-status {
+        grid-column: 1 / 2;
+        grid-row: 1 / 2;
+    }
+
+    .widget-hubstaff-daily {
+        grid-column: 1 / 2;
+        grid-row: 2 / 3;
+    }
+
+    .widget-calendar {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+    }
+
+    .widget-slack {
+        grid-column: 3 / 4;
+        grid-row: 1 / 2;
+    }
+
+    .widget-build {
+        grid-column: 2 / 4;
+        grid-row: 2 / 3;
+    }
+}
+
+/* Common Widget Styles */
+.widget {
+    background-color: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: transform 0.2s;
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.widget:active {
+    transform: scale(0.98);
+}
+
+.widget-title {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.9;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.widget-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.widget-meta {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-top: auto;
+    padding-top: 12px;
+}
+
+.loading {
+    opacity: 0.5;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.5;
+    }
+
+    50% {
+        opacity: 0.2;
+    }
+
+    100% {
+        opacity: 0.5;
+    }
+}
+
+/* Table Widget Styles */
+.widget-hubstaff-weekly {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #FF6B6B 0%, #5b68f1 100%);
+    align-items: stretch;
+    position: relative;
+    overflow: hidden;
+}
+
+@media (min-width: 768px) {
+    .widget-hubstaff-weekly {
+        grid-column: 1 / 2;
+        grid-row: 3 / 5;
+    }
+}
+
+.hw-chart-background {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 60%;
+    /* Occupy bottom half or so */
+    z-index: 0;
+    opacity: 0.3;
+    pointer-events: none;
+}
+
+.widget-hubstaff-weekly .widget-table-container {
+    position: relative;
+    z-index: 1;
+    /* Above the chart */
+}
+
+.widget-table-container {
+    width: 100%;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.widget-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    text-align: left;
+}
+
+.widget-table th {
+    padding: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+.widget-table td {
+    padding: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.widget-table tr:last-child td {
+    border-bottom: none;
+}
+
+
+/* Hubstaff Today Widget */
+.widget-hubstaff-today {
+    grid-column: 1 / -1;
+    background: linear-gradient(135deg, #FF6B6B 0%, #EE5253 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 20px;
+}
+
+@media (min-width: 768px) {
+    .widget-hubstaff-today {
+        grid-column: 1 / 3;
+        /* Span 2 cols */
+        grid-row: 1 / 2;
+    }
+}
+
+.hs-today-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.hs-header-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.hs-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    opacity: 0.8;
+    margin-bottom: 2px;
+}
+
+.hs-value-large {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.hs-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    width: 100%;
+    margin: 15px 0;
+}
+
+.hs-title-section {
+    text-align: center;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    opacity: 0.9;
+    margin-bottom: 10px;
+}
+
+.hs-today-stats {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.hs-stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+}
+
+.hs-stat-value {
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+/* Hubstaff Week Widget */
+.widget-hubstaff-week {
+    grid-column: 1 / -1;
+    background: linear-gradient(180deg, #2c3e50 0%, #000000 100%);
+    /* Darker for chart contrast */
+    position: relative;
+    padding: 0;
+    /* Let chart fill */
+    overflow: hidden;
+}
+
+@media (min-width: 768px) {
+    .widget-hubstaff-week {
+        grid-column: 3 / 4;
+        grid-row: 1 / 3;
+        /* Tall widget on side */
+    }
+}
+
+.hw-chart-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    opacity: 0.3;
+    /* Transparent background */
+    pointer-events: none;
+}
+
+.hw-table-container {
+    position: relative;
+    z-index: 2;
+    padding: 15px;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.hw-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.hw-table th {
+    text-transform: uppercase;
+    opacity: 0.7;
+    font-size: 0.7rem;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hw-table td {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+
+/* Hubstaff Today Split Layout */
+.hs-today-grid {
+    display: flex;
+    justify-content: center;
+    /* Center whole block */
+    align-items: center;
+    width: 100%;
+    margin-top: 10px;
+    gap: 40px;
+    /* Cleaner than divider margins */
+    flex-wrap: nowrap;
+    /* Prevent wrapping */
+}
+
+.hs-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.hs-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    opacity: 0.8;
+    margin-top: 5px;
+    letter-spacing: 0.05em;
+}
+
+.hs-val {
+    font-size: 2.2rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+/* Ensure widget values expand to fill space */
+.widget-status .widget-value,
+.widget-hubstaff-daily .widget-value {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* Vertical centering */
+}
+
+.hs-divider-vert {
+    width: 1px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.hs-today-container {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    height: 100%;
+    justify-content: space-evenly;
+    align-items: center;
+    gap: 0;
+}
