@@ -14,7 +14,7 @@ services:
   - type: static
     name: dashboard-frontend
     env: static
-    buildCommand:npm install && npm run build
+    buildCommand: npm install && npm run build
     publishDir: dist
     root: frontend
     routes:
