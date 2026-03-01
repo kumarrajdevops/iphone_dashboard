@@ -23,9 +23,9 @@
     /* Red/Pink */
 }
 
-.widget-calendar {
+.widget-gold {
     grid-column: 1 / 2;
-    background: linear-gradient(135deg, #4834d4 0%, #686de0 100%);
+    background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%);
 }
 
 .widget-slack {
@@ -54,7 +54,7 @@
         grid-row: 2 / 3;
     }
 
-    .widget-calendar {
+    .widget-gold {
         grid-column: 2 / 3;
         grid-row: 1 / 2;
     }

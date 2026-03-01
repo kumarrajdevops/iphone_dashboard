@@ -11,7 +11,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
-from hubstaff_token_manager import HubstaffTokenManager
+from services.hubstaff_auth import default_token_manager as token_manager
 
 router = APIRouter(prefix="/api/hubstaff", tags=["hubstaff"])
 
@@ -21,7 +21,6 @@ router = APIRouter(prefix="/api/hubstaff", tags=["hubstaff"])
 # Given the simple structure, we'll instantiate it here.
 # Ensure HUBSTAFF_PAT is set
 pat = os.getenv("HUBSTAFF_PAT")
-token_manager = HubstaffTokenManager(pat) if pat else None
 
 def format_time(seconds: int) -> str:
     hours = seconds // 3600
@@ -48,7 +47,7 @@ async def fetch_hubstaff_data(start_date: date, end_date: date):
     async with httpx.AsyncClient() as client:
         try:
             # Get valid access token
-            access_token = token_manager.get_access_token()
+            access_token = await token_manager.get_access_token()
             
             response = await client.get(
                 url,
@@ -59,7 +58,7 @@ async def fetch_hubstaff_data(start_date: date, end_date: date):
             # Retry once on 401 (Refresh)
             if response.status_code == 401:
                 print("Got 401 from Hubstaff. Refreshing token...")
-                access_token = token_manager.refresh_access_token()
+                access_token = await token_manager.refresh_access_token()
                 response = await client.get(
                     url,
                     headers={"Authorization": f"Bearer {access_token}"},
