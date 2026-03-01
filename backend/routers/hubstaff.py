@@ -106,7 +106,7 @@ async def get_hubstaff_today():
 @router.get("/weekly")
 async def get_hubstaff_weekly():
     today = date.today()
-    seven_days_ago = today - timedelta(days=6)
+    seven_days_ago = today - timedelta(days=7)
     
     # Fetch data up to today to ensure we cover the range, but we will filter today out
     daily_activities = await fetch_hubstaff_data(seven_days_ago, today)
