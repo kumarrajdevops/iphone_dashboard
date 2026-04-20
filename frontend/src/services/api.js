@@ -23,3 +23,25 @@ export const fetchHubstaffWeeklyData = async () => {
     if (!res.ok) throw new Error('Failed to fetch Hubstaff weekly data');
     return res.json();
 };
+
+export const fetchTasksFile = async () => {
+    const res = await fetch(`${getApiUrl()}/api/tasks/file`);
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch tasks file: ${text}`);
+    }
+    return res.json();
+};
+
+export const updateTasksFile = async (payload) => {
+    const res = await fetch(`${getApiUrl()}/api/tasks/file`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to update tasks file: ${text}`);
+    }
+    return res.json();
+};

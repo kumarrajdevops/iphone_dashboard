@@ -4,14 +4,16 @@ import os
 import uvicorn
 from dotenv import load_dotenv
 
-from routers import hubstaff, dashboard
+from routers import hubstaff, dashboard, tasks_sync
 
-load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = FastAPI()
 
 app.include_router(hubstaff.router)
 app.include_router(dashboard.router)
+app.include_router(tasks_sync.router)
 
 # CORS configuration
 origins = [
