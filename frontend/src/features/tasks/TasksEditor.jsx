@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchTasksFile, updateTasksFile } from '../../services/api';
 
 const starterTemplate = `# TODO -----20/04/2026
@@ -19,6 +19,7 @@ const countCheckboxes = (markdown) => {
 const footnotesTemplate = `Footnotes
 - Leave reason: Paternity leave, Sick leave, etc.
 - Status: completed, in-progress, postponed, blocked, leave, weekoff`;
+const PUBLISH_PASSWORD = '3232';
 
 const TODO_HEADER_REGEX = /^\s*#?\s*TODO\b.*$/i;
 const TODO_DATE_REGEX = /(\d{1,2})\/(\d{1,2})\/(\d{2,4})/;
@@ -211,8 +212,32 @@ const mergeFocusedEditsIntoFullContent = (fullContent, editorContent, editableKe
     .trim() + '\n';
 };
 
+const splitEditorContentByToday = (editorContent) => {
+  const sections = splitTodoSections(editorContent);
+  const tKey = todayKey();
+  const todaySections = sections.filter((sec) => sec.key === tKey).map((sec) => sec.content);
+  const historySections = sections.filter((sec) => sec.key !== tKey).map((sec) => sec.content);
+
+  return {
+    todayPart: todaySections.join('\n\n').trim(),
+    historyPart: historySections.join('\n\n').trim(),
+  };
+};
+
+const combineTodayAndHistory = (todayPart, historyPart) => {
+  const chunks = [];
+  const todayTrimmed = (todayPart || '').trim();
+  const historyTrimmed = (historyPart || '').trim();
+
+  if (todayTrimmed) chunks.push(todayTrimmed);
+  if (historyTrimmed) chunks.push(historyTrimmed);
+
+  return chunks.join('\n\n').trim();
+};
+
 const TasksEditor = () => {
-  const [content, setContent] = useState('');
+  const [todayContent, setTodayContent] = useState('');
+  const [historyContent, setHistoryContent] = useState('');
   const [fullContent, setFullContent] = useState('');
   const [editableKeys, setEditableKeys] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -220,6 +245,12 @@ const TasksEditor = () => {
   const [status, setStatus] = useState('');
   const [error, setError] = useState('');
   const [pathInfo, setPathInfo] = useState('');
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const todayTextareaRef = useRef(null);
+  const historyTextareaRef = useRef(null);
 
   useEffect(() => {
     const load = async () => {
@@ -230,13 +261,17 @@ const TasksEditor = () => {
         const source = data.content || starterTemplate;
         setFullContent(source);
         const focused = buildFocusedEditorView(source);
-        setContent(focused.editorContent);
+        const split = splitEditorContentByToday(focused.editorContent);
+        setTodayContent(split.todayPart || buildTodaySectionTemplate());
+        setHistoryContent(split.historyPart);
         setEditableKeys(focused.editableKeys);
         setPathInfo(`${data.path} @ ${data.branch}`);
       } catch (err) {
         setFullContent(starterTemplate);
         const focused = buildFocusedEditorView(starterTemplate);
-        setContent(focused.editorContent);
+        const split = splitEditorContentByToday(focused.editorContent);
+        setTodayContent(split.todayPart || buildTodaySectionTemplate());
+        setHistoryContent(split.historyPart);
         setEditableKeys(focused.editableKeys);
         setPathInfo('Preview mode (GitHub sync env vars not configured)');
         setError(err.message || 'Failed to load tasks file.');
@@ -248,14 +283,32 @@ const TasksEditor = () => {
     load();
   }, []);
 
-  const metrics = useMemo(() => countCheckboxes(content), [content]);
+  const editorContent = useMemo(
+    () => combineTodayAndHistory(todayContent, historyContent),
+    [todayContent, historyContent],
+  );
+  const metrics = useMemo(() => countCheckboxes(editorContent), [editorContent]);
+
+  useEffect(() => {
+    if (!todayTextareaRef.current) return;
+    const el = todayTextareaRef.current;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [todayContent, isLoading]);
+
+  useEffect(() => {
+    if (!historyTextareaRef.current) return;
+    const el = historyTextareaRef.current;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [historyContent, isLoading]);
 
   const handleSave = async () => {
     setIsSaving(true);
     setError('');
     setStatus('');
     try {
-      const finalContent = mergeFocusedEditsIntoFullContent(fullContent, content, editableKeys);
+      const finalContent = mergeFocusedEditsIntoFullContent(fullContent, editorContent, editableKeys);
       const result = await updateTasksFile({
         content: finalContent,
         message: `chore(tasks): update daily tasks ${new Date().toISOString().slice(0, 10)}`,
@@ -273,26 +326,47 @@ const TasksEditor = () => {
     }
   };
 
+  const openPasswordModal = () => {
+    setPasswordInput('');
+    setShowPassword(false);
+    setPasswordError('');
+    setIsPasswordModalOpen(true);
+  };
+
+  const closePasswordModal = () => {
+    if (isSaving) return;
+    setIsPasswordModalOpen(false);
+  };
+
+  const handlePasswordConfirm = async () => {
+    if (passwordInput !== PUBLISH_PASSWORD) {
+      setPasswordError('Invalid password.');
+      return;
+    }
+    setIsPasswordModalOpen(false);
+    await handleSave();
+  };
+
   const insertTodayBlock = () => {
     const today = new Date().toLocaleDateString('en-GB');
     const block = `\n\n# TODO -----${today}\n\n| Done | Task | Status | Remark |\n| --- | --- | --- | --- |\n| [ ] | New task (office) | in-progress | |\n`;
-    setContent((prev) => `${prev.trimEnd()}${block}`);
+    setTodayContent((prev) => `${prev.trimEnd()}${block}`.trim());
   };
 
   const addTableRow = () => {
-    setContent((prev) => `${prev}${prev.endsWith('\n') ? '' : '\n'}| [ ] | New task | in-progress | |\n`);
+    setTodayContent((prev) => `${prev}${prev.endsWith('\n') ? '' : '\n'}| [ ] | New task | in-progress | |\n`);
   };
 
   const insertLeaveDay = () => {
     const today = new Date().toLocaleDateString('en-GB');
     const block = `\n\n# TODO -----${today}\n**Day Note:** Leave\n\n| Done | Task | Status | Remark |\n| --- | --- | --- | --- |\n| [ ] | Leave | leave | Sick leave |\n`;
-    setContent((prev) => `${prev.trimEnd()}${block}`);
+    setTodayContent((prev) => `${prev.trimEnd()}${block}`.trim());
   };
 
   const insertWeekoffDay = () => {
     const today = new Date().toLocaleDateString('en-GB');
     const block = `\n\n# TODO -----${today}\n**Day Note:** Week Off\n\n| Done | Task | Status | Remark |\n| --- | --- | --- | --- |\n| [ ] | Week Off | weekoff | Weekend |\n`;
-    setContent((prev) => `${prev.trimEnd()}${block}`);
+    setTodayContent((prev) => `${prev.trimEnd()}${block}`.trim());
   };
 
   const copyFootnotes = async () => {
@@ -325,7 +399,7 @@ const TasksEditor = () => {
           <button type="button" className="tasks-btn ghost" onClick={addTableRow} disabled={isLoading || isSaving}>
             + Table Row
           </button>
-          <button type="button" className="tasks-btn" onClick={handleSave} disabled={isSaving || isLoading}>
+          <button type="button" className="tasks-btn" onClick={openPasswordModal} disabled={isSaving || isLoading}>
             {isSaving ? 'Saving...' : 'Save & Publish'}
           </button>
         </div>
@@ -340,30 +414,88 @@ const TasksEditor = () => {
       {status && <p className="tasks-status ok">{status}</p>}
       {error && <p className="tasks-status err">{error}</p>}
 
-      <div className="tasks-panel">
-        <div className="tasks-panel-head">
-          <span>Markdown Editor</span>
-          <small>Tip: use rows like `| [ ] | Task | in-progress | reason |`</small>
-        </div>
+      <div className="tasks-editing-area">
         {isLoading ? (
-          <p className="tasks-loading">Loading tasks markdown...</p>
+          <div className="tasks-panel">
+            <p className="tasks-loading">Loading tasks markdown...</p>
+          </div>
         ) : (
-          <textarea
-            className="tasks-editor"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            spellCheck={false}
-          />
+          <div className="tasks-editor-split">
+            <div className="tasks-panel tasks-panel-today">
+              <div className="tasks-panel-head">
+                <span>Today Task Block</span>
+                <small>Tip: use rows like `| [ ] | Task | in-progress | reason |`</small>
+              </div>
+              <textarea
+                className="tasks-editor tasks-editor-today"
+                ref={todayTextareaRef}
+                value={todayContent}
+                onChange={(e) => setTodayContent(e.target.value)}
+                spellCheck={false}
+              />
+            </div>
+
+            <div className="tasks-panel tasks-panel-history">
+              <div className="tasks-panel-head tasks-panel-head-history">
+                <span>History (Editable)</span>
+                <small>Previous range from last working-task date to yesterday</small>
+              </div>
+              <textarea
+                className="tasks-editor tasks-editor-history"
+                ref={historyTextareaRef}
+                value={historyContent}
+                onChange={(e) => setHistoryContent(e.target.value)}
+                spellCheck={false}
+              />
+            </div>
+          </div>
         )}
+
+        <section className="tasks-footnotes">
+          <div className="tasks-footnotes-head">
+            <strong>Footnotes (Copy/Paste)</strong>
+            <button type="button" className="tasks-btn ghost" onClick={copyFootnotes}>Copy</button>
+          </div>
+          <pre>{footnotesTemplate}</pre>
+        </section>
       </div>
 
-      <section className="tasks-footnotes">
-        <div className="tasks-footnotes-head">
-          <strong>Footnotes (Copy/Paste)</strong>
-          <button type="button" className="tasks-btn ghost" onClick={copyFootnotes}>Copy</button>
+      {isPasswordModalOpen && (
+        <div className="tasks-modal-backdrop" onClick={closePasswordModal}>
+          <div className="tasks-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Confirm Publish</h3>
+            <p>Enter password to Save & Publish changes.</p>
+            <div className="tasks-modal-input-row">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  setPasswordError('');
+                }}
+                placeholder="Enter password"
+                autoFocus
+              />
+              <button
+                type="button"
+                className="tasks-btn ghost"
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {passwordError && <p className="tasks-status err">{passwordError}</p>}
+            <div className="tasks-modal-actions">
+              <button type="button" className="tasks-btn ghost" onClick={closePasswordModal} disabled={isSaving}>
+                Cancel
+              </button>
+              <button type="button" className="tasks-btn" onClick={handlePasswordConfirm} disabled={isSaving}>
+                {isSaving ? 'Publishing...' : 'Publish'}
+              </button>
+            </div>
+          </div>
         </div>
-        <pre>{footnotesTemplate}</pre>
-      </section>
+      )}
     </section>
   );
 };
