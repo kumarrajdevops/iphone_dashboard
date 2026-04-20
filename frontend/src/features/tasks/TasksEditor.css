@@ -117,6 +117,59 @@
   flex-direction: column;
 }
 
+.tasks-form-table-wrap {
+  overflow-x: auto;
+  padding: 10px 12px;
+}
+
+.tasks-form-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.tasks-form-table th,
+.tasks-form-table td {
+  border-bottom: 1px solid #243042;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.tasks-form-table th {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9fb2cc;
+}
+
+.tasks-form-table td input[type='text'],
+.tasks-form-table td select {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b1220;
+  border: 1px solid #2b3a4f;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.tasks-form-table td input[type='checkbox'] {
+  transform: scale(1.1);
+}
+
+.tasks-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tasks-row-actions .tasks-btn {
+  padding: 6px 9px;
+  font-size: 0.75rem;
+}
+
 .tasks-editing-area {
   display: flex;
   flex-direction: column;
@@ -130,6 +183,14 @@
   flex: 0 0 auto;
   min-height: 0;
   gap: 12px;
+}
+
+.tasks-section-label {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9fb2cc;
+  padding: 2px 2px 0;
 }
 
 .tasks-panel-head-history {
