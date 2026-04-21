@@ -1,15 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { fetchTasksFile, updateTasksFile } from '../../services/api';
 
-const starterTemplate = `# TODO -----20/04/2026
-
-| Done | Task | Status | Remark |
-| --- | --- | --- | --- |
-| [ ] | First office task (office) | in-progress | morning plan |
-| [x] | Learning task (learning) | completed | completed and documented |
-| [ ] | Personal follow-up (personal) | in-progress | to do by EOD |
-`;
-
 const statusOptions = ['in-progress', 'completed', 'postponed', 'blocked', 'leave', 'weekoff'];
 const PUBLISH_PASSWORD = '3232';
 const footnotesTemplate = `Footnotes
@@ -128,7 +119,7 @@ const buildTodaySectionTemplate = () => `# TODO -----${toHeaderDate(new Date())}
 const buildFocusedEditorView = (fullMarkdown) => {
   const sections = splitTodoSections(fullMarkdown);
   if (!sections.length) {
-    return { editorContent: `${starterTemplate}\n\n${buildTodaySectionTemplate()}`, editableKeys: [] };
+    return { editorContent: buildTodaySectionTemplate(), editableKeys: [] };
   }
   const today = new Date();
   const tKey = todayKey();
@@ -223,7 +214,7 @@ const TasksEditor = () => {
       setError('');
       try {
         const data = await fetchTasksFile();
-        const source = data.content || starterTemplate;
+        const source = data.content || '';
         setFullContent(source);
         const focused = buildFocusedEditorView(source);
         const sectionBlocks = splitTodoSections(focused.editorContent).map(toBlock);
