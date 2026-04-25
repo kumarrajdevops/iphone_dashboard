@@ -28,6 +28,9 @@ const toDayTime = (date) => new Date(date.getFullYear(), date.getMonth(), date.g
 const toHeaderDate = (date) => `${`${date.getDate()}`.padStart(2, '0')}/${`${date.getMonth() + 1}`.padStart(2, '0')}/${date.getFullYear()}`;
 const toInputDate = (date) => `${date.getFullYear()}-${`${date.getMonth() + 1}`.padStart(2, '0')}-${`${date.getDate()}`.padStart(2, '0')}`;
 const createBlockId = () => `block-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const normalizeTaskKey = (task) => (task || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const CARRY_FORWARD_REMARK = 'working on other priority tasks as per requirement';
+const atMidnight = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
 const countCheckboxes = (markdown) => {
   const total = (markdown.match(/\[[xX ]\]/g) || []).length;
@@ -145,12 +148,26 @@ const buildFocusedEditorView = (fullMarkdown) => {
   const anchor = latestPreviousWithTasks || latestPreviousAny;
   const chunks = [];
   const keys = new Set();
+  const inProgressSectionKeys = new Set();
+
+  // Always include sections that still have in-progress work
+  // so no active tasks are missed due to date-window focus.
+  sections.forEach((sec) => {
+    if (!sec.key) return;
+    const n = sec.content.toLowerCase();
+    if (n.includes('| in-progress |')) {
+      inProgressSectionKeys.add(sec.key);
+    }
+  });
+
   if (anchor?.parsedDate) {
     const anchorTime = toDayTime(anchor.parsedDate);
     sections.forEach((sec) => {
       if (!sec.parsedDate) return;
       const secTime = toDayTime(sec.parsedDate);
-      if (secTime >= anchorTime && secTime <= todayTime) {
+      const shouldIncludeByDateWindow = secTime >= anchorTime && secTime <= todayTime;
+      const shouldIncludeByInProgress = sec.key && inProgressSectionKeys.has(sec.key);
+      if (shouldIncludeByDateWindow || shouldIncludeByInProgress) {
         chunks.push(sec.content);
         if (sec.key) keys.add(sec.key);
       }
@@ -161,6 +178,43 @@ const buildFocusedEditorView = (fullMarkdown) => {
     keys.add(tKey);
   }
   return { editorContent: chunks.join('\n\n'), editableKeys: Array.from(keys) };
+};
+
+const injectMissingDateBlocks = (sectionBlocks, sourceMarkdown) => {
+  if (!sectionBlocks.length) return sectionBlocks;
+
+  // Determine latest date from source markdown only (actual file content),
+  // not from any auto-created "today" editor template block.
+  const sourceSections = splitTodoSections(sourceMarkdown || '');
+  const sourceDates = sourceSections
+    .map((s) => s.parsedDate)
+    .filter(Boolean)
+    .map((d) => atMidnight(d));
+  if (!sourceDates.length) return sectionBlocks;
+  const latestDate = sourceDates.sort((a, b) => a.getTime() - b.getTime())[sourceDates.length - 1];
+  const todayDate = atMidnight(new Date());
+  if (latestDate.getTime() >= todayDate.getTime()) return sectionBlocks;
+
+  const existingKeys = new Set(sectionBlocks.map((b) => b.dateKey));
+  const added = [];
+  for (
+    let cursor = new Date(latestDate.getFullYear(), latestDate.getMonth(), latestDate.getDate() + 1);
+    cursor.getTime() < todayDate.getTime();
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1)
+  ) {
+    const key = dateKey(cursor);
+    if (existingKeys.has(key)) continue;
+    added.push({
+      id: createBlockId(),
+      dateKey: key,
+      parsedDate: new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate()),
+      headerLine: `# TODO -----${toHeaderDate(cursor)}`,
+      dayNoteLine: '',
+      rows: [{ done: false, task: 'New task (office)', status: 'in-progress', remark: '' }],
+    });
+  }
+  if (!added.length) return sectionBlocks;
+  return [...sectionBlocks, ...added];
 };
 
 const mergeFocusedEditsIntoFullContent = (fullContent, editorContent, editableKeys) => {
@@ -194,6 +248,94 @@ const mergeFocusedEditsIntoFullContent = (fullContent, editorContent, editableKe
   return ordered.filter(Boolean).join('\n\n').trim() + '\n';
 };
 
+const applyTaskWorkflowRules = (markdown) => {
+  const sections = splitTodoSections(markdown).map(toBlock);
+  if (!sections.length) return markdown;
+
+  // Ensure checkbox matches status everywhere first.
+  sections.forEach((section) => {
+    section.rows = section.rows.map((row) => ({
+      ...row,
+      done: row.status === 'completed',
+    }));
+  });
+
+  // Feature 1/2 work only on active task statuses, excluding leave/weekoff rows.
+  const taskRows = [];
+  sections.forEach((section, sectionIdx) => {
+    const sectionTime = toDayTime(section.parsedDate);
+    section.rows.forEach((row, rowIdx) => {
+      if (['leave', 'weekoff'].includes(row.status)) return;
+      taskRows.push({
+        sectionIdx,
+        rowIdx,
+        sectionTime,
+        dateStr: toHeaderDate(section.parsedDate),
+        key: normalizeTaskKey(row.task),
+        row,
+      });
+    });
+  });
+
+  const byTask = new Map();
+  taskRows.forEach((entry) => {
+    if (!entry.key) return;
+    if (!byTask.has(entry.key)) byTask.set(entry.key, []);
+    byTask.get(entry.key).push(entry);
+  });
+
+  // Feature 2: if same task is completed later, convert earlier in-progress to postponed with completion trace.
+  byTask.forEach((entries) => {
+    const completedEntries = entries
+      .filter((e) => e.row.status === 'completed')
+      .sort((a, b) => a.sectionTime - b.sectionTime || a.sectionIdx - b.sectionIdx || a.rowIdx - b.rowIdx);
+
+    if (!completedEntries.length) return;
+
+    entries.forEach((entry) => {
+      if (entry.row.status !== 'in-progress') return;
+      const laterCompletion = completedEntries.find((c) => c.sectionTime > entry.sectionTime);
+      if (!laterCompletion) return;
+      const completionNote = `carry forwarded to next day; completed on ${laterCompletion.dateStr}`;
+      const existingRemark = (entry.row.remark || '').trim();
+      entry.row.status = 'postponed';
+      entry.row.done = false;
+      if (!existingRemark) {
+        entry.row.remark = completionNote;
+      } else if (!existingRemark.toLowerCase().includes(`completed on ${laterCompletion.dateStr.toLowerCase()}`)) {
+        entry.row.remark = `${existingRemark}; ${completionNote}`;
+      }
+    });
+  });
+
+  // Feature 1: single active in-progress per task (latest only).
+  byTask.forEach((entries) => {
+    const inProgressEntries = entries
+      .filter((e) => e.row.status === 'in-progress')
+      .sort((a, b) => a.sectionTime - b.sectionTime || a.sectionIdx - b.sectionIdx || a.rowIdx - b.rowIdx);
+    if (inProgressEntries.length <= 1) return;
+    const latest = inProgressEntries[inProgressEntries.length - 1];
+    inProgressEntries.forEach((entry) => {
+      if (entry === latest) return;
+      entry.row.status = 'postponed';
+      entry.row.done = false;
+      if (!(entry.row.remark || '').trim()) {
+        entry.row.remark = CARRY_FORWARD_REMARK;
+      }
+    });
+  });
+
+  // Final checkbox/status sync pass.
+  sections.forEach((section) => {
+    section.rows = section.rows.map((row) => ({
+      ...row,
+      done: row.status === 'completed',
+    }));
+  });
+
+  return sections.map(blockToMarkdown).join('\n\n').trim() + '\n';
+};
+
 const TasksEditor = () => {
   const [blocks, setBlocks] = useState([]);
   const [fullContent, setFullContent] = useState('');
@@ -218,8 +360,15 @@ const TasksEditor = () => {
         setFullContent(source);
         const focused = buildFocusedEditorView(source);
         const sectionBlocks = splitTodoSections(focused.editorContent).map(toBlock);
-        setBlocks(sectionBlocks);
-        setEditableKeys(focused.editableKeys);
+        const enrichedBlocks = injectMissingDateBlocks(sectionBlocks, source);
+        setBlocks(enrichedBlocks);
+        const allEditableKeys = [
+          ...new Set([
+            ...focused.editableKeys,
+            ...enrichedBlocks.map((b) => b.dateKey).filter(Boolean),
+          ]),
+        ];
+        setEditableKeys(allEditableKeys);
         setPathInfo(`${data.path} @ ${data.branch}`);
       } catch (err) {
         setError(err.message || 'Failed to load tasks file.');
@@ -240,7 +389,11 @@ const TasksEditor = () => {
     () => [...blocks].sort((a, b) => toDayTime(a.parsedDate) - toDayTime(b.parsedDate)),
     [blocks],
   );
-  const historyBlocks = sortedBlocks.filter((b) => toDayTime(b.parsedDate) < todayMidnight);
+  const historyBlocks = useMemo(
+    () => [...sortedBlocks.filter((b) => toDayTime(b.parsedDate) < todayMidnight)]
+      .sort((a, b) => toDayTime(b.parsedDate) - toDayTime(a.parsedDate)),
+    [sortedBlocks, todayMidnight],
+  );
   const todayAndFutureBlocks = sortedBlocks.filter((b) => toDayTime(b.parsedDate) >= todayMidnight);
 
   const updateBlock = (id, updater) => {
@@ -258,7 +411,33 @@ const TasksEditor = () => {
   const deleteRow = (id, idx) => updateBlock(id, (b) => ({ ...b, rows: b.rows.filter((_, i) => i !== idx) }));
   const updateRow = (id, idx, field, value) => updateBlock(id, (b) => ({
     ...b,
-    rows: b.rows.map((r, i) => (i === idx ? { ...r, [field]: value } : r)),
+    rows: b.rows.map((r, i) => {
+      if (i !== idx) return r;
+
+      // Keep checkbox/status in sync:
+      // - status -> completed means done checked
+      // - done checked means status completed
+      // - done unchecked from completed falls back to in-progress
+      if (field === 'status') {
+        const nextStatus = value;
+        return {
+          ...r,
+          status: nextStatus,
+          done: nextStatus === 'completed' ? true : r.done,
+        };
+      }
+
+      if (field === 'done') {
+        const nextDone = Boolean(value);
+        return {
+          ...r,
+          done: nextDone,
+          status: nextDone ? 'completed' : (r.status === 'completed' ? 'in-progress' : r.status),
+        };
+      }
+
+      return { ...r, [field]: value };
+    }),
   }));
   const copyRowToToday = (id, idx) => {
     const tKey = todayKey();
@@ -337,7 +516,8 @@ const TasksEditor = () => {
     setError('');
     setStatus('');
     try {
-      const finalContent = mergeFocusedEditsIntoFullContent(fullContent, editorContent, editableKeys);
+      const mergedContent = mergeFocusedEditsIntoFullContent(fullContent, editorContent, editableKeys);
+      const finalContent = applyTaskWorkflowRules(mergedContent);
       const result = await updateTasksFile({
         content: finalContent,
         message: `chore(tasks): update daily tasks ${new Date().toISOString().slice(0, 10)}`,
@@ -475,6 +655,10 @@ const TasksEditor = () => {
               <div className="tasks-section-label">History</div>
             )}
             {historyBlocks.map((block) => {
+              const visibleHistoryRows = block.rows.filter(
+                (row) => ['in-progress', 'blocked', 'weekoff', 'leave'].includes(row.status),
+              );
+              if (!visibleHistoryRows.length) return null;
               return (
                 <div key={block.id} className="tasks-panel tasks-panel-history">
                   <div className="tasks-panel-head tasks-panel-head-history">
@@ -497,7 +681,7 @@ const TasksEditor = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {block.rows.map((row, idx) => (
+                        {visibleHistoryRows.map((row, idx) => (
                           <tr key={`${block.id}-${idx}`}>
                             <td><input type="checkbox" checked={row.done} onChange={(e) => updateRow(block.id, idx, 'done', e.target.checked)} /></td>
                             <td><input type="text" value={row.task} onChange={(e) => updateRow(block.id, idx, 'task', e.target.value)} /></td>
